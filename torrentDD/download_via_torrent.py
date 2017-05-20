@@ -33,7 +33,7 @@ class BaseDownloader(object):
 
     @staticmethod
     def get_episode_name(series, season_number, episode_number):
-        return "{series}.S{season}E{episode}".format(series=series.replace(' ', '.'), season=season_number,
+        return "{series}.s{season}e{episode}".format(series=series.replace(' ', '.'), season=season_number,
                                                      episode=episode_number)
 
 
@@ -91,7 +91,7 @@ class MoviesDownloader(BaseDownloader):
     def find_best_result(data, episode):
         for row in data:
             _, name, se, le, magnet_link = row
-            if magnet_link and episode in name and int(se) > SEEKER_THRESHOLD and int(le) > LEECHER_THRESHOLD:
+            if magnet_link and episode in name.lower() and int(se) > SEEKER_THRESHOLD and int(le) > LEECHER_THRESHOLD:
                 print u"Found result: {name} with {seekers} seekers, {leeches} leeches".format(name=name, seekers=se,
                                                                                                leeches=le)
                 return magnet_link
@@ -117,7 +117,7 @@ class MoviesDownloader(BaseDownloader):
                     download_version = re.search(VERSION_REGEX_PATTERN % episode, download_name, re.I).group(1)
                     return download_version
             else:
-                print "Couldn't find any matching episodes to: %s" % episode
+                print "Couldn't find any matching episode to: %s" % episode
 
 
 class SubtitlesDownloader(BaseDownloader):
@@ -142,7 +142,7 @@ class SubtitlesDownloader(BaseDownloader):
 
     def get_subscenter_soup(self, series, season_number, episode_number):
         subscenter_url = "http://www.subscenter.org/he/subtitle/series/{series}/{season_number}/{episode_number}/" \
-            .format(series=series.replace(' ', '-'), season_number=season_number, episode_number=episode_number).lower()
+            .format(series=series.replace(' ', '-'), season_number=season_number, episode_number=episode_number)
         print "Trying to reach: %s" % subscenter_url
         self.session.visit(subscenter_url)
         self.session.wait_for(lambda: self.session.at_css("div.subsDownloadVersion"))
@@ -158,8 +158,8 @@ class SubtitlesDownloader(BaseDownloader):
         download_id = None
         final_download_version = None
         for button_text, version in zip(buttons_text, versions):
-            version = re.search(VERSION_REGEX_PATTERN % episode, version.text).group(1)
-            if not download_id or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
+            version = re.search(VERSION_REGEX_PATTERN % episode, version.text, re.I).group(1)
+            if not download_id or Levenshtein.ratio(version, download_version.lower()) > SIMILARITY_THRESHOLD:
                 final_download_version = version
                 download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
@@ -189,8 +189,9 @@ class SubtitlesDownloader(BaseDownloader):
 
 def run(series, season_number, episode_number, download_directory, **kwargs):
     season_number = str(season_number).zfill(2)
-    series = series
-    episode_number = str(episode_number).zfill(2)
+    series = series.lower()
+    if episode_number:
+        episode_number = str(episode_number).zfill(2)
     download_directory = download_directory
 
     # hebrew_series_name = args.hebrew_series_name
