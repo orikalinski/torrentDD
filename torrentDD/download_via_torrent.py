@@ -53,7 +53,7 @@ class MoviesDownloader(BaseDownloader):
         pirate_url = "https://thepiratebay.org/search/{episode}/0/99/0".format(episode=episode)
         print "Trying to reach: %s" % pirate_url
         response = self.session.get(pirate_url)
-        if response.status_code == 200:
+        if response.ok:
             soup = BeautifulSoup(response.content, "lxml")
         else:
             print "Failed while trying to fetch html from: %s" % pirate_url
@@ -168,10 +168,13 @@ class SubtitlesDownloader(BaseDownloader):
 
     @staticmethod
     def stream_download_subtitles(download_link, download_directory):
-        r = requests.get(download_link, stream=True)
-        z = zipfile.ZipFile(StringIO.StringIO(r.content))
-        z.extractall(download_directory)
-        print "Subtitles extracted in: %s" % download_directory
+        response = requests.get(download_link, stream=True)
+        if response.ok:
+            z = zipfile.ZipFile(StringIO.StringIO(response.content))
+            z.extractall(download_directory)
+            print "Subtitles extracted in: %s" % download_directory
+        else:
+            print "Failed while trying to download the subtitles"
 
     def download_subtitles(self, series, season_number, episode_number, download_version, download_directory):
         episode = self.get_episode_name(series, season_number, episode_number)
