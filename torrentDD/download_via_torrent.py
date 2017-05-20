@@ -112,7 +112,7 @@ class MoviesDownloader(BaseDownloader):
             if magnet_link:
                 download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
                 if download_name:
-                    download_version = re.search(r"%s" % episode + "\.(.*)\.", download_name, re.I).group(1)
+                    download_version = re.search(r"%s" % episode + "\.(.+?)(?:\.mkv)?$", download_name, re.I).group(1)
                     return download_version
             else:
                 print "Couldn't find any matching episodes to: %s" % episode
