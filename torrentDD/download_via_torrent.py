@@ -72,18 +72,19 @@ class MoviesDownloader(BaseDownloader):
         data = []
         table = soup.find('table', attrs={'id': 'searchResult'})
 
-        rows = table.find_all('tr')
-        for row in rows[1:]:
-            cols = row.find_all('td')
-            cols_text = [ele.text.strip() for ele in cols]
-            for col in cols:
-                magnet_link = col.find('a', href=MAGNET_REGEX)
-                if magnet_link:
-                    cols_text.append(magnet_link.get('href'))
-                    break
-            if len(cols_text) == 4:
-                cols_text.append(None)
-            data.append(cols_text)
+        if table:
+            rows = table.find_all('tr')
+            for row in rows[1:]:
+                cols = row.find_all('td')
+                cols_text = [ele.text.strip() for ele in cols]
+                for col in cols:
+                    magnet_link = col.find('a', href=MAGNET_REGEX)
+                    if magnet_link:
+                        cols_text.append(magnet_link.get('href'))
+                        break
+                if len(cols_text) == 4:
+                    cols_text.append(None)
+                data.append(cols_text)
         return data
 
     @staticmethod
@@ -144,7 +145,7 @@ class SubtitlesDownloader(BaseDownloader):
             .format(series=series.replace(' ', '-'), season_number=season_number, episode_number=episode_number).lower()
         print "Trying to reach: %s" % subscenter_url
         self.session.visit(subscenter_url)
-        self.session.wait_for(lambda : self.session.at_css("div.subsDownloadVersion"))
+        self.session.wait_for(lambda: self.session.at_css("div.subsDownloadVersion"))
         response = self.session.body()
         soup = BeautifulSoup(response, "lxml")
         return soup
@@ -162,7 +163,8 @@ class SubtitlesDownloader(BaseDownloader):
                 final_download_version = version
                 download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
-            download_link = "http://www.subscenter.org/he/get/download/he/?{download_id}".format(download_id=download_id)
+            download_link = "http://www.subscenter.org/he/get/download/he/?{download_id}"\
+                .format(download_id=download_id)
             print "Found subtitles of version: %s" % final_download_version
             return download_link
         print "Couldn't find any matching subtitles to: %s" % episode
@@ -203,7 +205,8 @@ def run(series, season_number, episode_number, download_directory, **kwargs):
     download_version = movies_downloader.download_torrent(series, season_number, episode_number, download_directory)
     if download_version:
         subtitles_downloader = SubtitlesDownloader()
-        subtitles_downloader.download_subtitles(series, season_number, episode_number, download_version, download_directory)
+        subtitles_downloader.download_subtitles(series, season_number, episode_number,
+                                                download_version, download_directory)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -214,8 +217,3 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--hebrew_series_name')
     args = parser.parse_args()
     run(**args.__dict__)
-
-
-
-
-
