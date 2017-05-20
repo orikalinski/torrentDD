@@ -9,9 +9,9 @@ from textblob.blob import TextBlob
 import zipfile
 import StringIO
 import Levenshtein
+from enum import Enum
 
 import dryscrape
-
 import requests
 import transmissionrpc
 from bs4 import BeautifulSoup
@@ -20,11 +20,14 @@ from requests.adapters import HTTPAdapter
 
 SIMILARITY_THRESHOLD = 0.75
 SEEKER_THRESHOLD = 50
-LEECHER_THRESHOLD = 5
+LEECHES_THRESHOLD = 5
+MAX_NUMBER_OF_EPISODE_PER_SEASON = 20
 
 MAGNET_REGEX = re.compile("^magnet")
 DOWNLOAD_REGEX = re.compile("\?(.*?)'")
 VERSION_REGEX_PATTERN = "%s\.(.+?)(?:\.mkv)?$"
+
+Status = Enum('Status', 'success no_connection no_results generic_error')
 
 
 class BaseDownloader(object):
@@ -91,7 +94,7 @@ class MoviesDownloader(BaseDownloader):
     def find_best_result(data, episode):
         for row in data:
             _, name, se, le, magnet_link = row
-            if magnet_link and episode in name.lower() and int(se) > SEEKER_THRESHOLD and int(le) > LEECHER_THRESHOLD:
+            if magnet_link and episode in name.lower() and int(se) > SEEKER_THRESHOLD and int(le) > LEECHES_THRESHOLD:
                 print u"Found result: {name} with {seekers} seekers, {leeches} leeches".format(name=name, seekers=se,
                                                                                                leeches=le)
                 return magnet_link
@@ -115,9 +118,13 @@ class MoviesDownloader(BaseDownloader):
                 download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
                 if download_name:
                     download_version = re.search(VERSION_REGEX_PATTERN % episode, download_name, re.I).group(1)
-                    return download_version
+                    return Status.success, download_version
             else:
                 print "Couldn't find any matching episode to: %s" % episode
+                return Status.no_results, None
+        else:
+            return Status.no_connection, None
+        return Status.generic_erorr, None
 
 
 class SubtitlesDownloader(BaseDownloader):
@@ -158,10 +165,12 @@ class SubtitlesDownloader(BaseDownloader):
         download_id = None
         final_download_version = None
         for button_text, version in zip(buttons_text, versions):
-            version = re.search(VERSION_REGEX_PATTERN % episode, version.text, re.I).group(1)
-            if not download_id or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
-                final_download_version = version
-                download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
+            result = re.search(VERSION_REGEX_PATTERN % episode, version.text, re.I)
+            if result:
+                version = result.group(1)
+                if not download_id or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
+                    final_download_version = version
+                    download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
             download_link = "http://www.subscenter.org/he/get/download/he/?{download_id}"\
                 .format(download_id=download_id)
@@ -187,27 +196,47 @@ class SubtitlesDownloader(BaseDownloader):
         self.stream_download_subtitles(download_link, download_directory)
 
 
+def create_directory(directory):
+    if not os.path.exists(directory):
+        os.mkdir(directory)
+        os.chmod(directory, 0777)
+
+
 def run(series, season_number, episode_number, download_directory, **kwargs):
     season_number = str(season_number).zfill(2)
-    series = series.lower()
     if episode_number:
-        episode_number = str(episode_number).zfill(2)
-    download_directory = download_directory
+        episodes_numbers = [episode_number]
+    else:
+        episodes_numbers = range(1, MAX_NUMBER_OF_EPISODE_PER_SEASON)
 
     # hebrew_series_name = args.hebrew_series_name
     # hebrew_episode_name = subtitles_downloader.get_hebrew_episode_name(series, season_number, episode_number)
 
-    episode = BaseDownloader.get_episode_name(series, season_number, episode_number)
-    download_directory = os.path.join(download_directory, episode)
-    if not os.path.exists(download_directory):
-        os.mkdir(download_directory)
-        os.chmod(download_directory, 0777)
+    for component in [series.replace(' ', '.'), season_number]:
+        download_directory = os.path.join(download_directory, component)
+        create_directory(download_directory)
     movies_downloader = MoviesDownloader()
-    download_version = movies_downloader.download_torrent(series, season_number, episode_number, download_directory)
-    if download_version:
-        subtitles_downloader = SubtitlesDownloader()
-        subtitles_downloader.download_subtitles(series, season_number, episode_number,
-                                                download_version, download_directory)
+    subtitles_downloader = SubtitlesDownloader()
+
+    downloaded_episodes = list()
+    for episode_number in episodes_numbers:
+        status = None
+        while not status or status == Status.no_connection:
+            episode_number = str(episode_number).zfill(2)
+            episode_download_directory = os.path.join(download_directory, episode_number)
+            create_directory(episode_download_directory)
+            status, download_version = movies_downloader.download_torrent(series.lower(), season_number,
+                                                                          episode_number, episode_download_directory)
+            if download_version:
+                subtitles_downloader.download_subtitles(series, season_number, episode_number,
+                                                        download_version, episode_download_directory)
+            if status == Status.no_connection:
+                time.sleep(60)
+        if status == Status.no_results:
+            break
+        elif status == Status.success:
+            downloaded_episodes.append(episode_number)
+    print "The following episodes: %s were downloaded successfully" % downloaded_episodes
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
