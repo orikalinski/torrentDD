@@ -158,8 +158,8 @@ class SubtitlesDownloader(BaseDownloader):
         download_id = None
         final_download_version = None
         for button_text, version in zip(buttons_text, versions):
-            version = re.search(VERSION_REGEX_PATTERN % episode, version.text.lower(), re.I).group(1)
-            if not download_id or Levenshtein.ratio(version, download_version.lower()) > SIMILARITY_THRESHOLD:
+            version = re.search(VERSION_REGEX_PATTERN % episode, version.text, re.I).group(1)
+            if not download_id or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
                 final_download_version = version
                 download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
