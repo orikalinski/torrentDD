@@ -8,6 +8,7 @@ import argparse
 from textblob.blob import TextBlob
 import zipfile
 import StringIO
+import Levenshtein
 
 import dryscrape
 
@@ -17,6 +18,7 @@ from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from requests.adapters import HTTPAdapter
 
+SIMILARITY_THRESHOLD = 0.85
 SEEKER_THRESHOLD = 50
 LEECHER_THRESHOLD = 5
 MAGNET_REGEX = re.compile("^magnet")
@@ -138,7 +140,7 @@ class SubtitlesDownloader(BaseDownloader):
 
     def get_subscenter_soup(self, series, season_number, episode_number):
         subscenter_url = "http://www.subscenter.org/he/subtitle/series/{series}/{season_number}/{episode_number}/" \
-            .format(series=series, season_number=season_number, episode_number=episode_number).lower()
+            .format(series=series.replace(' ', '-'), season_number=season_number, episode_number=episode_number).lower()
         print "Trying to reach: %s" % subscenter_url
         self.session.visit(subscenter_url)
         self.session.wait_for(lambda : self.session.at_css("div.subsDownloadVersion"))
@@ -155,7 +157,7 @@ class SubtitlesDownloader(BaseDownloader):
         final_download_version = None
         for button_text, version in zip(buttons_text, versions):
             version = re.search(r"%s" % episode + "\.(.*)", version.text).group(1)
-            if not download_id or version.lower() == download_version.lower():
+            if not download_id or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
                 final_download_version = version
                 download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
