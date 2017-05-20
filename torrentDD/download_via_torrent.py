@@ -52,7 +52,7 @@ class MoviesDownloader(BaseDownloader):
         print "Trying to reach: %s" % pirate_url
         response = self.session.get(pirate_url)
         if response.status_code == 200:
-            soup = BeautifulSoup(response.content)
+            soup = BeautifulSoup(response.content, "lxml")
         else:
             print "Failed while trying to fetch html from: %s" % pirate_url
             return
@@ -107,9 +107,13 @@ class MoviesDownloader(BaseDownloader):
         soup = self.get_pirate_bay_soup(episode)
         if soup:
             magnet_link = self.extract_magnet_link_from_soup(soup, episode)
-            download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
-            download_version = re.search(r"%s" % episode + "\.(.*)", download_name).group(1)
-            return download_version
+            if magnet_link:
+                download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
+                if download_name:
+                    download_version = re.search(r"%s" % episode + "\.(.*)\.", download_name, re.I).group(1)
+                    return download_version
+            else:
+                print "Couldn't find any matching episodes to: %s" % episode
 
 
 class SubtitlesDownloader(BaseDownloader):
@@ -139,7 +143,7 @@ class SubtitlesDownloader(BaseDownloader):
         self.session.visit(subscenter_url)
         self.session.wait_for(lambda : self.session.at_css("div.subsDownloadVersion"))
         response = self.session.body()
-        soup = BeautifulSoup(response)
+        soup = BeautifulSoup(response, "lxml")
         return soup
 
     @staticmethod
@@ -148,12 +152,17 @@ class SubtitlesDownloader(BaseDownloader):
         buttons_text = soup.find_all("div", {"class": "subsDownloadBtn"})
         versions = soup.find_all("div", {"class": "subsDownloadVersion"})
         download_id = None
+        final_download_version = None
         for button_text, version in zip(buttons_text, versions):
             version = re.search(r"%s" % episode + "\.(.*)", version.text).group(1)
-            if not download_id or version == download_version:
+            if not download_id or version.lower() == download_version.lower():
+                final_download_version = version
                 download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
-        download_link = "http://www.subscenter.org/he/get/download/he/?{download_id}".format(download_id=download_id)
-        return download_link
+        if download_id:
+            download_link = "http://www.subscenter.org/he/get/download/he/?{download_id}".format(download_id=download_id)
+            print "Found subtitles of version: %s" % final_download_version
+            return download_link
+        print "Couldn't find any matching subtitles to: %s" % episode
 
     @staticmethod
     def stream_download_subtitles(download_link, download_directory):
@@ -170,11 +179,11 @@ class SubtitlesDownloader(BaseDownloader):
         self.stream_download_subtitles(download_link, download_directory)
 
 
-def run(args):
-    season_number = args.season_number.zfill(2)
-    series = args.series
-    episode_number = args.episode_number.zfill(2)
-    download_directory = args.download_directory
+def run(series, season_number, episode_number, download_directory, **kwargs):
+    season_number = str(season_number).zfill(2)
+    series = series
+    episode_number = str(episode_number).zfill(2)
+    download_directory = download_directory
 
     # hebrew_series_name = args.hebrew_series_name
     # hebrew_episode_name = subtitles_downloader.get_hebrew_episode_name(series, season_number, episode_number)
@@ -186,9 +195,9 @@ def run(args):
         os.chmod(download_directory, 0777)
     movies_downloader = MoviesDownloader()
     download_version = movies_downloader.download_torrent(series, season_number, episode_number, download_directory)
-
-    subtitles_downloader = SubtitlesDownloader()
-    subtitles_downloader.download_subtitles(series, season_number, episode_number, download_version, download_directory)
+    if download_version:
+        subtitles_downloader = SubtitlesDownloader()
+        subtitles_downloader.download_subtitles(series, season_number, episode_number, download_version, download_directory)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -198,7 +207,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--download_directory')
     parser.add_argument('-n', '--hebrew_series_name')
     args = parser.parse_args()
-    run(args)
+    run(**args.__dict__)
 
 
 
