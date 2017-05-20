@@ -18,12 +18,13 @@ from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from requests.adapters import HTTPAdapter
 
-SIMILARITY_THRESHOLD = 0.85
+SIMILARITY_THRESHOLD = 0.75
 SEEKER_THRESHOLD = 50
 LEECHER_THRESHOLD = 5
-MAGNET_REGEX = re.compile("^magnet")
 
+MAGNET_REGEX = re.compile("^magnet")
 DOWNLOAD_REGEX = re.compile("\?(.*?)'")
+VERSION_REGEX_PATTERN = "%s\.(.+?)(?:\.mkv)?$"
 
 
 class BaseDownloader(object):
@@ -112,7 +113,7 @@ class MoviesDownloader(BaseDownloader):
             if magnet_link:
                 download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
                 if download_name:
-                    download_version = re.search(r"%s" % episode + "\.(.+?)(?:\.mkv)?$", download_name, re.I).group(1)
+                    download_version = re.search(VERSION_REGEX_PATTERN % episode, download_name, re.I).group(1)
                     return download_version
             else:
                 print "Couldn't find any matching episodes to: %s" % episode
@@ -156,7 +157,7 @@ class SubtitlesDownloader(BaseDownloader):
         download_id = None
         final_download_version = None
         for button_text, version in zip(buttons_text, versions):
-            version = re.search(r"%s" % episode + "\.(.*)", version.text).group(1)
+            version = re.search(VERSION_REGEX_PATTERN % episode, version.text).group(1)
             if not download_id or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
                 final_download_version = version
                 download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
