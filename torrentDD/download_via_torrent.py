@@ -279,13 +279,13 @@ def create_directory(directory):
         os.chmod(directory, 0777)
 
 
-def run(series, season_number, episode_number, download_directory, lang, should_use_subscenter=True,
+def run(series, season_number, episode_number, download_directory, lang, full_season=False, should_use_subscenter=True,
         subtitles_only=False, **kwargs):
     season_number = str(season_number).zfill(2)
-    if episode_number:
+    if not full_season:
         episodes_numbers = [episode_number]
     else:
-        episodes_numbers = range(1, MAX_NUMBER_OF_EPISODE_PER_SEASON)
+        episodes_numbers = range(max(episode_number, 1), MAX_NUMBER_OF_EPISODE_PER_SEASON)
 
     for component in [series.replace(' ', '-'), "season%s" % season_number]:
         download_directory = os.path.join(download_directory, component)
