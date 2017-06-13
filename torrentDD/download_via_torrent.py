@@ -283,7 +283,7 @@ def create_directory(directory):
         os.chmod(directory, 0777)
 
 
-def run(series, season_number, episode_number, download_directory, lang, **kwargs):
+def run(series, season_number, episode_number, download_directory, lang, should_use_subscenter=True, **kwargs):
     season_number = str(season_number).zfill(2)
     if episode_number:
         episodes_numbers = [episode_number]
@@ -307,18 +307,20 @@ def run(series, season_number, episode_number, download_directory, lang, **kwarg
             status, download_version = movies_downloader.download_torrent(series.lower(), season_number,
                                                                           episode_number, episode_download_directory)
             if download_version:
-                status = None
-                if lang == HEBREW:
-                    status = subscenter_downloader.download_subtitles(series, season_number, episode_number,
-                                                                      download_version, episode_download_directory)
-                if (not status or status != Status.success) and lang == HEBREW:
-                    status = opensubtitles_downloader.download_subtitles(series, season_number, episode_number,
-                                                                         download_version, episode_download_directory,
-                                                                         lang=lang)
-                if not status or status != Status.success:
-                    status = opensubtitles_downloader.download_subtitles(series, season_number, episode_number,
-                                                                         download_version, episode_download_directory,
-                                                                         lang=ENGLISH)
+                subtitles_status = None
+                if should_use_subscenter and lang == HEBREW:
+                    subtitles_status = subscenter_downloader.download_subtitles(series, season_number, episode_number,
+                                                                                download_version,
+                                                                                episode_download_directory)
+                if (not subtitles_status or subtitles_status != Status.success) and lang == HEBREW:
+                    subtitles_status = opensubtitles_downloader.download_subtitles(series, season_number,
+                                                                                   episode_number, download_version,
+                                                                                   episode_download_directory,
+                                                                                   lang=lang)
+                if not subtitles_status or subtitles_status != Status.success:
+                    opensubtitles_downloader.download_subtitles(series, season_number, episode_number,
+                                                                download_version, episode_download_directory,
+                                                                lang=ENGLISH)
             if status == Status.no_connection:
                 time.sleep(60)
         if status == Status.no_results:
