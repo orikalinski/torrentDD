@@ -156,7 +156,11 @@ class SubtitlesDownloader(BaseDownloader):
             .format(series=series.replace(' ', '-'), season_number=season_number, episode_number=episode_number)
         print "Trying to reach: %s" % subscenter_url
         self.session.visit(subscenter_url)
-        self.session.wait_for(lambda: self.session.at_css("div.subsDownloadVersion"))
+        try:
+            self.session.wait_for(lambda: self.session.at_css("div.subsDownloadVersion"))
+        except Exception, e:
+            print "Failed while trying to download the subtitles: %s" % e
+            return None
         response = self.session.body()
         soup = BeautifulSoup(response, "lxml")
         return soup
@@ -185,23 +189,21 @@ class SubtitlesDownloader(BaseDownloader):
 
     @staticmethod
     def stream_download_subtitles(download_link, download_directory):
-        try:
-            response = requests.get(download_link, stream=True)
-            if response.ok:
-                z = zipfile.ZipFile(StringIO.StringIO(response.content))
-                z.extractall(download_directory)
-                print "Subtitles extracted in: %s" % download_directory
-            else:
-                print "Failed while trying to download the subtitles"
-        except Exception, e:
-            print "Failed while trying to download the subtitles: %s" % e
+        response = requests.get(download_link, stream=True)
+        if response.ok:
+            z = zipfile.ZipFile(StringIO.StringIO(response.content))
+            z.extractall(download_directory)
+            print "Subtitles extracted in: %s" % download_directory
+        else:
+            print "Failed while trying to download the subtitles"
 
     def download_subtitles(self, series, season_number, episode_number, download_version, download_directory):
         episode = self.get_episode_name(series, season_number, episode_number)
         self.set_crawling_attributes()
         soup = self.get_subscenter_soup(series, season_number, episode_number)
-        download_link = self.get_download_link(soup, episode, download_version)
-        self.stream_download_subtitles(download_link, download_directory)
+        if soup:
+            download_link = self.get_download_link(soup, episode, download_version)
+            self.stream_download_subtitles(download_link, download_directory)
 
 
 def create_directory(directory):
