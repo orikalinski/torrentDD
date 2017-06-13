@@ -80,23 +80,27 @@ class MoviesDownloader(BaseDownloader):
             for row in rows[1:]:
                 cols = row.find_all('td')
                 cols_text = [ele.text.strip() for ele in cols]
+                cols_text.extend([None, None])
                 for col in cols:
                     magnet_link = col.find('a', href=MAGNET_REGEX)
+                    is_valid = col.find(attrs={'title': ['VIP', 'Trusted']}) is not None
+                    if is_valid:
+                        cols_text[5] = is_valid
                     if magnet_link:
-                        cols_text.append(magnet_link.get('href'))
-                        break
-                if len(cols_text) == 4:
-                    cols_text.append(None)
+                        cols_text[4] = magnet_link.get('href')
                 data.append(cols_text)
         return data
 
     @staticmethod
     def find_best_result(data, episode):
         for row in data:
-            _, name, se, le, magnet_link = row
-            if magnet_link and episode in name.lower() and int(se) > SEEKER_THRESHOLD and int(le) > LEECHES_THRESHOLD:
-                print u"Found result: {name} with {seekers} seekers, {leeches} leeches".format(name=name, seekers=se,
-                                                                                               leeches=le)
+            _, name, se, le, magnet_link, is_valid = row
+            if magnet_link and (episode in name.lower() or episode.replace('.', ' ') in name.lower()) \
+                and ((int(se) > SEEKER_THRESHOLD and int(le) > LEECHES_THRESHOLD)
+                     or (is_valid and int(se) > SEEKER_THRESHOLD // 5)):
+                print u"Found {trusted} result: {name} with {seeders} seeders, " \
+                      u"{leechers} leechers".format(name=name, seeders=se, leechers=le,
+                                                    trusted="trusted" if is_valid else "not trusted")
                 return magnet_link
 
     def download_torrent_from_magnet_link(self, magnet_link, download_directory):
@@ -168,7 +172,8 @@ class SubtitlesDownloader(BaseDownloader):
             result = re.search(VERSION_REGEX_PATTERN % episode, version.text, re.I)
             if result:
                 version = result.group(1)
-                if not download_id or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
+                if not download_id \
+                        or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
                     final_download_version = version
                     download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
