@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import re
-import os
-import time
-import argparse
-import zipfile
 import StringIO
-import Levenshtein
-from enum import Enum
+import argparse
+import glob
+import os
+import re
+import time
+import zipfile
 
+import Levenshtein
 import dryscrape
 import requests
 import transmissionrpc
 from bs4 import BeautifulSoup
+from enum import Enum
 from fake_useragent import UserAgent
-from requests.adapters import HTTPAdapter
 
 SIMILARITY_THRESHOLD = 0.75
 SEEKER_THRESHOLD = 50
@@ -282,6 +282,8 @@ def create_directory(directory):
 def run(series, season_number, episode_number, download_directory, lang, full_season=False, should_use_subscenter=True,
         subtitles_only=False, **kwargs):
     season_number = str(season_number).zfill(2)
+    episode_number = episode_number if isinstance(episode_number, int) \
+        else int(episode_number) if episode_number.isdigit() else 0
     if not full_season:
         episodes_numbers = [episode_number]
     else:
@@ -295,6 +297,7 @@ def run(series, season_number, episode_number, download_directory, lang, full_se
     subscenter_downloader = SubscenterDownloader()
     opensubtitles_downloader = OpenSubtitleDownloader()
 
+    episodes_directories = list()
     downloaded_episodes = list()
     for episode_number in episodes_numbers:
         status = None
@@ -302,7 +305,9 @@ def run(series, season_number, episode_number, download_directory, lang, full_se
         while not status or status == Status.no_connection:
             episode_number = str(episode_number).zfill(2)
             episode_download_directory = os.path.join(download_directory, "episode%s" % episode_number)
-            create_directory(episode_download_directory)
+            if episode_download_directory not in episodes_directories:
+                create_directory(episode_download_directory)
+                episodes_directories.append(episode_download_directory)
             if not subtitles_only:
                 status, download_version = movies_downloader.download_torrent(series, season_number,
                                                                               episode_number, episode_download_directory)
@@ -329,6 +334,14 @@ def run(series, season_number, episode_number, download_directory, lang, full_se
             break
         elif status == Status.success:
             downloaded_episodes.append(episode_number)
+
+    for directory in episodes_directories:
+        if not os.listdir(directory):
+            os.rmdir(directory)
+        else:
+            files = glob.glob(os.path.join(directory, "*.nfo"))
+            for file_path in files:
+                os.remove(file_path)
     print "The following episodes: %s were downloaded successfully" % downloaded_episodes
 
 if __name__ == '__main__':
@@ -338,5 +351,6 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--episode_number')
     parser.add_argument('-d', '--download_directory')
     parser.add_argument('-l', '--lang')
+    parser.add_argument('-f', '--full_season')
     args = parser.parse_args()
     run(**args.__dict__)
