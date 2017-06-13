@@ -35,7 +35,7 @@ ENGLISH = "en"
 
 OPENSUBTITLES_BASE_URL = "https://www.opensubtitles.org"
 
-Status = Enum('Status', 'success no_connection no_results generic_error')
+Status = Enum('Status', 'success no_connection no_results no_good_results generic_error')
 
 
 class BaseDownloader(object):
@@ -83,14 +83,13 @@ class MoviesDownloader(BaseDownloader):
     def extract_magnet_link_from_soup(self, soup, episode):
         print "Extracting magnet link for episode: %s" % episode
         data = self.extract_results(soup)
-        magnet_link = self.find_best_result(data, episode)
-        return magnet_link
+        status, magnet_link = self.find_best_result(data, episode)
+        return status, magnet_link
 
     @staticmethod
     def extract_results(soup):
-        data = []
         table = soup.find('table', attrs={'id': 'searchResult'})
-
+        data = []
         if table:
             rows = table.find_all('tr')
             for row in rows[1:]:
@@ -109,6 +108,7 @@ class MoviesDownloader(BaseDownloader):
 
     @staticmethod
     def find_best_result(data, episode):
+        status = Status.no_good_results if data else Status.no_results
         for row in data:
             _, name, se, le, magnet_link, is_valid = row
             if magnet_link and (episode in name.lower() or episode.replace('.', ' ') in name.lower()) \
@@ -117,7 +117,9 @@ class MoviesDownloader(BaseDownloader):
                 print u"Found {trusted} result: {name} with {seeders} seeders, " \
                       u"{leechers} leechers".format(name=name, seeders=se, leechers=le,
                                                     trusted="trusted" if is_valid else "not trusted")
-                return magnet_link
+                status = Status.success
+                return status, magnet_link
+        return status, None
 
     def download_torrent_from_magnet_link(self, magnet_link, download_directory):
         torrent = self.tc.add_torrent(magnet_link, download_dir=download_directory)
@@ -133,15 +135,18 @@ class MoviesDownloader(BaseDownloader):
         self.set_crawling_attributes()
         soup = self.get_pirate_bay_soup(episode)
         if soup:
-            magnet_link = self.extract_magnet_link_from_soup(soup, episode)
+            status, magnet_link = self.extract_magnet_link_from_soup(soup, episode)
             if magnet_link:
                 download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
                 if download_name:
                     download_version = re.search(VERSION_REGEX_PATTERN % episode, download_name, re.I).group(1)
                     return Status.success, download_version
             else:
-                print "Couldn't find any matching episode to: %s" % episode
-                return Status.no_results, None
+                if status == Status.no_results:
+                    print "Couldn't find any matching episode to: %s" % episode
+                else:
+                    print "Couldn't find any trusty episode to: %s" % episode
+                return status, None
         else:
             return Status.no_connection, None
         return Status.generic_erorr, None
