@@ -5,7 +5,6 @@ import re
 import os
 import time
 import argparse
-from textblob.blob import TextBlob
 import zipfile
 import StringIO
 import Levenshtein
@@ -24,8 +23,17 @@ LEECHES_THRESHOLD = 5
 MAX_NUMBER_OF_EPISODE_PER_SEASON = 20
 
 MAGNET_REGEX = re.compile("^magnet")
-DOWNLOAD_REGEX = re.compile("\?(.*?)'")
-VERSION_REGEX_PATTERN = "%s\.(.+?)(?:\.mkv)?$"
+SUBSCENTER_DOWNLOAD_REGEX = re.compile("\?(.*?)'")
+OPENSUBTITLES_DOWNLOAD_REGEX = re.compile("subtitles\/(\d+)\/")
+OPENSUBTITLES_REFERRER_REGEX = re.compile("\'(.+)\'")
+AUTHORITY_REGEX = re.compile("https:\/\/(.+?)\/")
+VERSION_REGEX_PATTERN = "%s\.(.+?)(?:\.mkv)?(?:download at|$)"
+
+CANONIZE_LANG = {"en": "eng", "he": "heb"}
+HEBREW = "he"
+ENGLISH = "en"
+
+OPENSUBTITLES_BASE_URL = "https://www.opensubtitles.org"
 
 Status = Enum('Status', 'success no_connection no_results generic_error')
 
@@ -39,6 +47,15 @@ class BaseDownloader(object):
         return "{series}.s{season}e{episode}".format(series=series.replace(' ', '.'), season=season_number,
                                                      episode=episode_number)
 
+    @staticmethod
+    def extract_details_from_episode_name(episode):
+        return episode.split('.')
+
+    def get_headers_with_user_agent(self):
+        headers = requests.utils.default_headers()
+        headers.update({'User-Agent': self.user_agent.random})
+        return headers
+
 
 class MoviesDownloader(BaseDownloader):
     def __init__(self):
@@ -48,9 +65,7 @@ class MoviesDownloader(BaseDownloader):
 
     def set_crawling_attributes(self):
         print "Setting movies crawler attributes"
-        headers = requests.utils.default_headers()
-        headers.update({'User-Agent': self.user_agent.random})
-        self.session.headers = headers
+        self.session.headers = self.get_headers_with_user_agent()
         self.session.mount("https://", HTTPAdapter(max_retries=5))
 
     def get_pirate_bay_soup(self, episode):
@@ -140,18 +155,92 @@ class SubtitlesDownloader(BaseDownloader):
         print "Setting subtitles crawler attributes"
         self.session.set_header('User-Agent', self.user_agent.random)
 
-    @staticmethod
-    def get_hebrew_episode_name(series, season_number, episode_number):
-        blob = TextBlob(series)
-        hebrew_series_name = blob.translate(to="he")
-        res = raw_input(u"Did you mean: %s? (Y/n)" % hebrew_series_name)
-        if res == 'n':
-            hebrew_series_name = raw_input(u"Write the hebrew series name")
-        hebrew_episode = u"{hebrew_series_name} עונה {season_number} פרק {episode_number}" \
-            .format(hebrew_series_name=hebrew_series_name, season_number=season_number, episode_number=episode_number)
-        return hebrew_episode
+    def stream_download_subtitles(self, download_link, download_directory, referrer_link=None):
+        headers = self.get_headers_with_user_agent()
+        if referrer_link:
+            headers['referer'] = referrer_link
+            headers['authority'] = AUTHORITY_REGEX.search(download_link).group(1)
+        response = requests.get(download_link, stream=True, headers=headers)
+        if response.ok:
+            z = zipfile.ZipFile(StringIO.StringIO(response.content))
+            z.extractall(download_directory)
+            print "Subtitles extracted in: %s" % download_directory
+            return Status.success
+        else:
+            print "Failed while trying to download the subtitles"
+            return Status.generic_erorr
 
-    def get_subscenter_soup(self, series, season_number, episode_number):
+    def get_soup(self, series, season_number, episode_number, lang="en"):
+        raise NotImplementedError
+
+    def get_download_link(self, soup, episode, download_version):
+        raise NotImplementedError
+
+    def download_subtitles(self, series, season_number, episode_number, download_version,
+                           download_directory, lang="en"):
+        episode = self.get_episode_name(series, season_number, episode_number)
+        self.set_crawling_attributes()
+        soup = self.get_soup(series, season_number, episode_number, lang=lang)
+        if soup:
+            download_link, referrer_link = self.get_download_link(soup, episode, download_version)
+            if download_link:
+                return self.stream_download_subtitles(download_link, download_directory, referrer_link=referrer_link)
+
+
+class OpenSubtitleDownloader(SubtitlesDownloader):
+    def __init__(self):
+        super(OpenSubtitleDownloader, self).__init__()
+
+    def get_soup(self, series, season_number, episode_number, lang="en"):
+        opensubtitles_url = "https://www.opensubtitles.org/en/search/sublanguageid-all/searchonlytvseries-on/" \
+                            "season-{season_number}/episode-{episode}/fulltextuseor-on/moviename-{series}/" \
+                            "sublanguageid-{lang}" \
+            .format(series=series.replace(' ', '-'), season_number=season_number,
+                    episode=episode_number, lang=CANONIZE_LANG.get(lang, lang))
+        print "Trying to reach: %s" % opensubtitles_url
+        self.session.visit(opensubtitles_url)
+        try:
+            self.session.wait_for(lambda: self.session.at_css("div.msg"))
+        except Exception, e:
+            print "Failed while trying to download the subtitles: %s" % e
+            return None
+        response = self.session.body()
+        soup = BeautifulSoup(response, "lxml")
+        return soup
+
+    def get_download_link(self, soup, episode, download_version):
+        print "Extracting download link for episode: %s" % episode
+        subtitles = soup.find_all('td', {"class": ["sb_star_odd", "sb_star_even"]})
+        download_id = None
+        referrer_link = None
+        final_download_version = None
+        series, episode_details = self.extract_details_from_episode_name(episode)
+        for subtitle in subtitles:
+            subtitles_text = subtitle.text.lower()
+            if '"{series}"'.format(series=series) in subtitles_text and episode_details in subtitles_text:
+                result = re.search(VERSION_REGEX_PATTERN % episode, subtitles_text)
+                version = result.group(1) if result else ""
+                if not download_id \
+                        or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
+                    final_download_version = version
+                    download_id = OPENSUBTITLES_DOWNLOAD_REGEX.search(subtitle.find("a").get("onclick")).group(1)
+                    referrer_link = "%s%s" % (OPENSUBTITLES_BASE_URL,
+                                              OPENSUBTITLES_REFERRER_REGEX
+                                              .search(subtitle.find("a").get("onclick")).group(1))
+        if download_id:
+            download_link = "https://dl.opensubtitles.org/en/download/sub/{download_id}" \
+                .format(download_id=download_id)
+            print "Found subtitles of version: %s, with download_link: %s" % (final_download_version, download_link)
+            return download_link, referrer_link
+        print "Couldn't find any matching subtitles to: %s" % episode
+        return None, None
+
+
+class SubscenterDownloader(SubtitlesDownloader):
+    def __init__(self):
+        super(SubscenterDownloader, self).__init__()
+
+    def get_soup(self, series, season_number, episode_number, **kwargs):
         subscenter_url = "http://www.subscenter.org/he/subtitle/series/{series}/{season_number}/{episode_number}/" \
             .format(series=series.replace(' ', '-'), season_number=season_number, episode_number=episode_number)
         print "Trying to reach: %s" % subscenter_url
@@ -165,8 +254,7 @@ class SubtitlesDownloader(BaseDownloader):
         soup = BeautifulSoup(response, "lxml")
         return soup
 
-    @staticmethod
-    def get_download_link(soup, episode, download_version):
+    def get_download_link(self, soup, episode, download_version):
         print "Extracting download link for episode: %s" % episode
         buttons_text = soup.find_all("div", {"class": "subsDownloadBtn"})
         versions = soup.find_all("div", {"class": "subsDownloadVersion"})
@@ -179,31 +267,14 @@ class SubtitlesDownloader(BaseDownloader):
                 if not download_id \
                         or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
                     final_download_version = version
-                    download_id = DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
+                    download_id = SUBSCENTER_DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
             download_link = "http://www.subscenter.org/he/get/download/he/?{download_id}"\
                 .format(download_id=download_id)
             print "Found subtitles of version: %s" % final_download_version
-            return download_link
+            return download_link, None
         print "Couldn't find any matching subtitles to: %s" % episode
-
-    @staticmethod
-    def stream_download_subtitles(download_link, download_directory):
-        response = requests.get(download_link, stream=True)
-        if response.ok:
-            z = zipfile.ZipFile(StringIO.StringIO(response.content))
-            z.extractall(download_directory)
-            print "Subtitles extracted in: %s" % download_directory
-        else:
-            print "Failed while trying to download the subtitles"
-
-    def download_subtitles(self, series, season_number, episode_number, download_version, download_directory):
-        episode = self.get_episode_name(series, season_number, episode_number)
-        self.set_crawling_attributes()
-        soup = self.get_subscenter_soup(series, season_number, episode_number)
-        if soup:
-            download_link = self.get_download_link(soup, episode, download_version)
-            self.stream_download_subtitles(download_link, download_directory)
+        return None, None
 
 
 def create_directory(directory):
@@ -212,21 +283,19 @@ def create_directory(directory):
         os.chmod(directory, 0777)
 
 
-def run(series, season_number, episode_number, download_directory, **kwargs):
+def run(series, season_number, episode_number, download_directory, lang, **kwargs):
     season_number = str(season_number).zfill(2)
     if episode_number:
         episodes_numbers = [episode_number]
     else:
         episodes_numbers = range(1, MAX_NUMBER_OF_EPISODE_PER_SEASON)
 
-    # hebrew_series_name = args.hebrew_series_name
-    # hebrew_episode_name = subtitles_downloader.get_hebrew_episode_name(series, season_number, episode_number)
-
     for component in [series.replace(' ', '-'), "season%s" % season_number]:
         download_directory = os.path.join(download_directory, component)
         create_directory(download_directory)
     movies_downloader = MoviesDownloader()
-    subtitles_downloader = SubtitlesDownloader()
+    subscenter_downloader = SubscenterDownloader()
+    opensubtitles_downloader = OpenSubtitleDownloader()
 
     downloaded_episodes = list()
     for episode_number in episodes_numbers:
@@ -238,8 +307,18 @@ def run(series, season_number, episode_number, download_directory, **kwargs):
             status, download_version = movies_downloader.download_torrent(series.lower(), season_number,
                                                                           episode_number, episode_download_directory)
             if download_version:
-                subtitles_downloader.download_subtitles(series, season_number, episode_number,
-                                                        download_version, episode_download_directory)
+                status = None
+                if lang == HEBREW:
+                    status = subscenter_downloader.download_subtitles(series, season_number, episode_number,
+                                                                      download_version, episode_download_directory)
+                if (not status or status != Status.success) and lang == HEBREW:
+                    status = opensubtitles_downloader.download_subtitles(series, season_number, episode_number,
+                                                                         download_version, episode_download_directory,
+                                                                         lang=lang)
+                if not status or status != Status.success:
+                    status = opensubtitles_downloader.download_subtitles(series, season_number, episode_number,
+                                                                         download_version, episode_download_directory,
+                                                                         lang=ENGLISH)
             if status == Status.no_connection:
                 time.sleep(60)
         if status == Status.no_results:
@@ -254,6 +333,6 @@ if __name__ == '__main__':
     parser.add_argument('-ser', '--series')
     parser.add_argument('-e', '--episode_number')
     parser.add_argument('-d', '--download_directory')
-    parser.add_argument('-n', '--hebrew_series_name')
+    parser.add_argument('-l', '--lang')
     args = parser.parse_args()
     run(**args.__dict__)
