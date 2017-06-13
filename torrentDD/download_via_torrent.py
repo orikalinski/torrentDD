@@ -41,6 +41,11 @@ Status = Enum('Status', 'success no_connection no_results generic_error')
 class BaseDownloader(object):
     def __init__(self):
         self.user_agent = UserAgent()
+        self.session = dryscrape.Session()
+
+    def set_crawling_attributes(self):
+        print "Setting %s crawler attributes" % self.__class__.__name__
+        self.session.set_header('User-Agent', self.user_agent.random)
 
     @staticmethod
     def get_episode_name(series, season_number, episode_number):
@@ -60,23 +65,19 @@ class BaseDownloader(object):
 class MoviesDownloader(BaseDownloader):
     def __init__(self):
         super(MoviesDownloader, self).__init__()
-        self.session = requests.Session()
         self.tc = transmissionrpc.Client(user="transmission", password="transmission")
-
-    def set_crawling_attributes(self):
-        print "Setting movies crawler attributes"
-        self.session.headers = self.get_headers_with_user_agent()
-        self.session.mount("https://", HTTPAdapter(max_retries=5))
 
     def get_pirate_bay_soup(self, episode):
         pirate_url = "https://thepiratebay.org/search/{episode}/0/99/0".format(episode=episode)
         print "Trying to reach: %s" % pirate_url
-        response = self.session.get(pirate_url)
-        if response.ok:
-            soup = BeautifulSoup(response.content, "lxml")
-        else:
-            print "Failed while trying to fetch html from: %s" % pirate_url
-            return
+        self.session.visit(pirate_url)
+        try:
+            self.session.wait_for(lambda: self.session.at_css("tr.header"))
+        except Exception, e:
+            print "Failed while trying to reach piratebay.org: %s" % e
+            return None
+        response = self.session.body()
+        soup = BeautifulSoup(response, "lxml")
         return soup
 
     def extract_magnet_link_from_soup(self, soup, episode):
@@ -149,11 +150,6 @@ class MoviesDownloader(BaseDownloader):
 class SubtitlesDownloader(BaseDownloader):
     def __init__(self):
         super(SubtitlesDownloader, self).__init__()
-        self.session = dryscrape.Session()
-
-    def set_crawling_attributes(self):
-        print "Setting subtitles crawler attributes"
-        self.session.set_header('User-Agent', self.user_agent.random)
 
     def stream_download_subtitles(self, download_link, download_directory, referrer_link=None):
         headers = self.get_headers_with_user_agent()
@@ -219,7 +215,7 @@ class OpenSubtitleDownloader(SubtitlesDownloader):
             subtitles_text = subtitle.text.lower()
             if '"{series}"'.format(series=series) in subtitles_text and episode_details in subtitles_text:
                 result = re.search(VERSION_REGEX_PATTERN % episode, subtitles_text)
-                version = result.group(1) if result else ""
+                version = result.group(1) if result else u""
                 if not download_id \
                         or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
                     final_download_version = version
