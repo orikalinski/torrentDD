@@ -72,7 +72,7 @@ class MoviesDownloader(BaseDownloader):
         print "Trying to reach: %s" % pirate_url
         self.session.visit(pirate_url)
         try:
-            self.session.wait_for(lambda: self.session.at_css("tr.header"))
+            self.session.wait_for(lambda: self.session.at_css("td.vertTh"))
         except Exception, e:
             print "Failed while trying to reach piratebay.org: %s" % e
             return None
