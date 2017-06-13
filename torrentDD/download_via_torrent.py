@@ -293,6 +293,7 @@ def run(series, season_number, episode_number, download_directory, lang, should_
     for component in [series.replace(' ', '-'), "season%s" % season_number]:
         download_directory = os.path.join(download_directory, component)
         create_directory(download_directory)
+    series = series.lower()
     movies_downloader = MoviesDownloader()
     subscenter_downloader = SubscenterDownloader()
     opensubtitles_downloader = OpenSubtitleDownloader()
@@ -304,7 +305,7 @@ def run(series, season_number, episode_number, download_directory, lang, should_
             episode_number = str(episode_number).zfill(2)
             episode_download_directory = os.path.join(download_directory, "episode%s" % episode_number)
             create_directory(episode_download_directory)
-            status, download_version = movies_downloader.download_torrent(series.lower(), season_number,
+            status, download_version = movies_downloader.download_torrent(series, season_number,
                                                                           episode_number, episode_download_directory)
             if download_version:
                 subtitles_status = None
