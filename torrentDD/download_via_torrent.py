@@ -306,6 +306,8 @@ def run(series, season_number, episode_number, download_directory, lang, should_
             if not subtitles_only:
                 status, download_version = movies_downloader.download_torrent(series, season_number,
                                                                               episode_number, episode_download_directory)
+            else:
+                status = Status.success
             if download_version is not None:
                 subtitles_status = None
                 if should_use_subscenter and lang == HEBREW:
