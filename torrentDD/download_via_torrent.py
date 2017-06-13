@@ -185,13 +185,16 @@ class SubtitlesDownloader(BaseDownloader):
 
     @staticmethod
     def stream_download_subtitles(download_link, download_directory):
-        response = requests.get(download_link, stream=True)
-        if response.ok:
-            z = zipfile.ZipFile(StringIO.StringIO(response.content))
-            z.extractall(download_directory)
-            print "Subtitles extracted in: %s" % download_directory
-        else:
-            print "Failed while trying to download the subtitles"
+        try:
+            response = requests.get(download_link, stream=True)
+            if response.ok:
+                z = zipfile.ZipFile(StringIO.StringIO(response.content))
+                z.extractall(download_directory)
+                print "Subtitles extracted in: %s" % download_directory
+            else:
+                print "Failed while trying to download the subtitles"
+        except Exception, e:
+            print "Failed while trying to download the subtitles: %s" % e
 
     def download_subtitles(self, series, season_number, episode_number, download_version, download_directory):
         episode = self.get_episode_name(series, season_number, episode_number)
