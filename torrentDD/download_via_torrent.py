@@ -279,7 +279,8 @@ def create_directory(directory):
         os.chmod(directory, 0777)
 
 
-def run(series, season_number, episode_number, download_directory, lang, should_use_subscenter=True, **kwargs):
+def run(series, season_number, episode_number, download_directory, lang, should_use_subscenter=True,
+        subtitles_only=False, **kwargs):
     season_number = str(season_number).zfill(2)
     if episode_number:
         episodes_numbers = [episode_number]
@@ -297,13 +298,15 @@ def run(series, season_number, episode_number, download_directory, lang, should_
     downloaded_episodes = list()
     for episode_number in episodes_numbers:
         status = None
+        download_version = u""
         while not status or status == Status.no_connection:
             episode_number = str(episode_number).zfill(2)
             episode_download_directory = os.path.join(download_directory, "episode%s" % episode_number)
             create_directory(episode_download_directory)
-            status, download_version = movies_downloader.download_torrent(series, season_number,
-                                                                          episode_number, episode_download_directory)
-            if download_version:
+            if not subtitles_only:
+                status, download_version = movies_downloader.download_torrent(series, season_number,
+                                                                              episode_number, episode_download_directory)
+            if download_version is not None:
                 subtitles_status = None
                 if should_use_subscenter and lang == HEBREW:
                     subtitles_status = subscenter_downloader.download_subtitles(series, season_number, episode_number,
