@@ -54,7 +54,8 @@ class BaseDownloader(object):
 
     @staticmethod
     def extract_details_from_episode_name(episode):
-        return episode.split('.')
+        splitted_episode = episode.split('.')
+        return " ".join(splitted_episode[:-1]), splitted_episode[-1]
 
     def get_headers_with_user_agent(self):
         headers = requests.utils.default_headers()
@@ -284,7 +285,7 @@ def create_directory(directory):
         os.chmod(directory, 0777)
 
 
-def run(series, season_number, episode_number, download_directory, lang, full_season=False, should_use_subscenter=True,
+def run(series, season_number, episode_number, download_directory, lang, full_season=False, should_use_subscenter=False,
         subtitles_only=False, **kwargs):
     season_number = str(season_number).zfill(2)
     episode_number = episode_number if isinstance(episode_number, int) \
