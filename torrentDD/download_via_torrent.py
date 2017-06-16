@@ -114,7 +114,7 @@ class MoviesDownloader(BaseDownloader):
         proper_results = list()
         for row in data:
             _, name, se, le, magnet_link, is_valid = row
-            if magnet_link and (episode in name.lower() or episode.replace('.', ' ') in name.lower()):
+            if magnet_link and (name.lower().startswith(episode) or name.lower().startswith(episode.replace('.', ' '))):
                 status = Status.no_good_results
                 if (int(se) > SEEKER_THRESHOLD and int(le) > LEECHES_THRESHOLD) \
                         or (is_valid and int(se) > SEEKER_THRESHOLD // 5):
