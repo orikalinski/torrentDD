@@ -110,15 +110,16 @@ class MoviesDownloader(BaseDownloader):
 
     @staticmethod
     def find_best_result(data, episode, best_resolution):
-        status = Status.no_good_results if data else Status.no_results
+        status = Status.no_results
         proper_results = list()
         for row in data:
             _, name, se, le, magnet_link, is_valid = row
-            if magnet_link and (episode in name.lower() or episode.replace('.', ' ') in name.lower()) \
-                and ((int(se) > SEEKER_THRESHOLD and int(le) > LEECHES_THRESHOLD)
-                     or (is_valid and int(se) > SEEKER_THRESHOLD // 5)):
-                size = int(SERIES_SIZE_REGEX.search(name.lower()).group(1))
-                proper_results.append((magnet_link, size, row))
+            if magnet_link and (episode in name.lower() or episode.replace('.', ' ') in name.lower()):
+                status = Status.no_good_results
+                if (int(se) > SEEKER_THRESHOLD and int(le) > LEECHES_THRESHOLD) \
+                        or (is_valid and int(se) > SEEKER_THRESHOLD // 5):
+                    size = int(SERIES_SIZE_REGEX.search(name.lower()).group(1))
+                    proper_results.append((magnet_link, size, row))
         if proper_results:
             if best_resolution:
                 best_result = max(proper_results, key=lambda x: x[1])
