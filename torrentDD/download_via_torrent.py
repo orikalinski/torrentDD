@@ -29,7 +29,7 @@ SUBSCENTER_DOWNLOAD_REGEX = re.compile("\?(.*?)'")
 OPENSUBTITLES_DOWNLOAD_REGEX = re.compile("subtitles/(\d+)/")
 OPENSUBTITLES_REFERRER_REGEX = re.compile("\'(.+)\'")
 AUTHORITY_REGEX = re.compile("https://(.+?)/")
-VERSION_REGEX_PATTERN = "%s\.(.+?)(?:\.mkv)?(?:download at|$)"
+VERSION_REGEX_PATTERN = "{series}.*{episode_details}\.(.+?)(?:\.mkv)?(?:download at|$)"
 
 CANONIZE_LANG = {"en": "eng", "he": "heb"}
 HEBREW = "he"
@@ -143,6 +143,7 @@ class MoviesDownloader(BaseDownloader):
 
     def download_torrent(self, series, season_number, episode_number, download_directory):
         episode = self.get_episode_name(series, season_number, episode_number)
+        series, episode_details = self.extract_details_from_episode_name(episode)
         self.set_crawling_attributes()
         soup = self.get_pirate_bay_soup(episode)
         if soup:
@@ -150,7 +151,9 @@ class MoviesDownloader(BaseDownloader):
             if magnet_link:
                 download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
                 if download_name:
-                    download_version = re.search(VERSION_REGEX_PATTERN % episode, download_name, re.I).group(1)
+                    download_version = re.search(VERSION_REGEX_PATTERN.format(series=series.replace(' ', '.'),
+                                                                              episode_details=episode_details),
+                                                 download_name, re.I).group(1)
                     return Status.success, download_version
             else:
                 if status == Status.no_results:
@@ -230,7 +233,8 @@ class OpenSubtitleDownloader(SubtitlesDownloader):
         for subtitle in subtitles:
             subtitles_text = subtitle.text.lower()
             if '"{series}"'.format(series=series) in subtitles_text and episode_details in subtitles_text:
-                result = re.search(VERSION_REGEX_PATTERN % episode, subtitles_text)
+                result = re.search(VERSION_REGEX_PATTERN.format(series=series.replace(' ', '.'),
+                                                                episode_details=episode_details), subtitles_text)
                 version = result.group(1) if result else u""
                 if not download_id \
                         or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
@@ -268,12 +272,14 @@ class SubscenterDownloader(SubtitlesDownloader):
 
     def get_download_link(self, soup, episode, download_version):
         print "Extracting download link for episode: %s" % episode
+        series, episode_details = self.extract_details_from_episode_name(episode)
         buttons_text = soup.find_all("div", {"class": "subsDownloadBtn"})
         versions = soup.find_all("div", {"class": "subsDownloadVersion"})
         download_id = None
         final_download_version = None
         for button_text, version in zip(buttons_text, versions):
-            result = re.search(VERSION_REGEX_PATTERN % episode, version.text, re.I)
+            result = re.search(VERSION_REGEX_PATTERN.format(series=series.replace(' ', '.'),
+                                                            episode_details=episode_details), version.text, re.I)
             if result:
                 version = result.group(1)
                 if not download_id \
