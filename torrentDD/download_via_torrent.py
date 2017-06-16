@@ -11,6 +11,7 @@ import zipfile
 
 import Levenshtein
 import dryscrape
+import progressbar
 import requests
 import transmissionrpc
 from bs4 import BeautifulSoup
@@ -124,10 +125,11 @@ class MoviesDownloader(BaseDownloader):
 
     def download_torrent_from_magnet_link(self, magnet_link, download_directory):
         torrent = self.tc.add_torrent(magnet_link, download_dir=download_directory)
+        bar = progressbar.ProgressBar(widgets=[progressbar.Percentage(), progressbar.Bar()]).start()
         while not hasattr(torrent, "status") or torrent.status == "downloading":
-            time.sleep(5)
+            time.sleep(1)
             torrent.update()
-            print "Downloading torrent, progress: %s" % torrent.progress
+            bar.update(torrent.progress)
         print "Done downloading the link"
         return torrent.name
 
@@ -285,8 +287,8 @@ def create_directory(directory):
         os.chmod(directory, 0777)
 
 
-def run(series, season_number, episode_number, download_directory, lang, full_season=False, should_use_subscenter=False,
-        subtitles_only=False, **kwargs):
+def run(series, season_number, episode_number, download_directory, lang, full_season=False,
+        should_use_subscenter=False, subtitles_only=False, **kwargs):
     season_number = str(season_number).zfill(2)
     episode_number = episode_number if isinstance(episode_number, int) \
         else int(episode_number) if episode_number.isdigit() else 0

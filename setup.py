@@ -9,5 +9,5 @@ setup(name='torentDD',
       license='',
       packages=['torrentDD'],
       install_requires=['textblob', 'dryscrape', 'requests', 'transmissionrpc', 
-                        'bs4', 'fake_useragent', 'python-levenshtein', 'enum'],
+                        'bs4', 'fake_useragent', 'python-levenshtein', 'enum', 'progressbar'],
       zip_safe=False)
