@@ -24,10 +24,11 @@ LEECHES_THRESHOLD = 5
 MAX_NUMBER_OF_EPISODE_PER_SEASON = 20
 
 MAGNET_REGEX = re.compile("^magnet")
+SERIES_SIZE_REGEX = re.compile("size (\d+).*mib")
 SUBSCENTER_DOWNLOAD_REGEX = re.compile("\?(.*?)'")
-OPENSUBTITLES_DOWNLOAD_REGEX = re.compile("subtitles\/(\d+)\/")
+OPENSUBTITLES_DOWNLOAD_REGEX = re.compile("subtitles/(\d+)/")
 OPENSUBTITLES_REFERRER_REGEX = re.compile("\'(.+)\'")
-AUTHORITY_REGEX = re.compile("https:\/\/(.+?)\/")
+AUTHORITY_REGEX = re.compile("https://(.+?)/")
 VERSION_REGEX_PATTERN = "%s\.(.+?)(?:\.mkv)?(?:download at|$)"
 
 CANONIZE_LANG = {"en": "eng", "he": "heb"}
@@ -111,16 +112,22 @@ class MoviesDownloader(BaseDownloader):
     @staticmethod
     def find_best_result(data, episode):
         status = Status.no_good_results if data else Status.no_results
+        proper_results = list()
         for row in data:
             _, name, se, le, magnet_link, is_valid = row
             if magnet_link and (episode in name.lower() or episode.replace('.', ' ') in name.lower()) \
                 and ((int(se) > SEEKER_THRESHOLD and int(le) > LEECHES_THRESHOLD)
                      or (is_valid and int(se) > SEEKER_THRESHOLD // 5)):
-                print u"Found {trusted} result: {name} with {seeders} seeders, " \
-                      u"{leechers} leechers".format(name=name, seeders=se, leechers=le,
-                                                    trusted="trusted" if is_valid else "not trusted")
-                status = Status.success
-                return status, magnet_link
+                size = int(SERIES_SIZE_REGEX.search(name.lower()).group(1))
+                proper_results.append((magnet_link, size, row))
+        if proper_results:
+            best_result = max(proper_results, key=lambda x: x[1])
+            _, name, se, le, magnet_link, is_valid = best_result[2]
+            print u"Found {trusted} result: {name} with {seeders} seeders, " \
+                  u"{leechers} leechers".format(name=name, seeders=se, leechers=le,
+                                                trusted="trusted" if is_valid else "not trusted")
+
+            return Status.success, best_result[0]
         return status, None
 
     def download_torrent_from_magnet_link(self, magnet_link, download_directory):
@@ -318,8 +325,8 @@ def run(series, season_number, episode_number, download_directory, lang, full_se
                 create_directory(episode_download_directory)
                 episodes_directories.append(episode_download_directory)
             if not subtitles_only:
-                status, download_version = movies_downloader.download_torrent(series, season_number,
-                                                                              episode_number, episode_download_directory)
+                status, download_version = movies_downloader.download_torrent(series, season_number, episode_number,
+                                                                              episode_download_directory)
             else:
                 status = Status.success
             if download_version is not None:
