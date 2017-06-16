@@ -83,10 +83,10 @@ class MoviesDownloader(BaseDownloader):
         soup = BeautifulSoup(response, "lxml")
         return soup
 
-    def extract_magnet_link_from_soup(self, soup, episode):
+    def extract_magnet_link_from_soup(self, soup, episode, best_resolution):
         print "Extracting magnet link for episode: %s" % episode
         data = self.extract_results(soup)
-        status, magnet_link = self.find_best_result(data, episode)
+        status, magnet_link = self.find_best_result(data, episode, best_resolution)
         return status, magnet_link
 
     @staticmethod
@@ -110,7 +110,7 @@ class MoviesDownloader(BaseDownloader):
         return data
 
     @staticmethod
-    def find_best_result(data, episode):
+    def find_best_result(data, episode, best_resolution):
         status = Status.no_good_results if data else Status.no_results
         proper_results = list()
         for row in data:
@@ -121,7 +121,10 @@ class MoviesDownloader(BaseDownloader):
                 size = int(SERIES_SIZE_REGEX.search(name.lower()).group(1))
                 proper_results.append((magnet_link, size, row))
         if proper_results:
-            best_result = max(proper_results, key=lambda x: x[1])
+            if best_resolution:
+                best_result = max(proper_results, key=lambda x: x[1])
+            else:
+                best_result = max(proper_results, key=lambda x: int(x[2][2]))
             _, name, se, le, magnet_link, is_valid = best_result[2]
             print u"Found {trusted} result: {name} with {seeders} seeders, " \
                   u"{leechers} leechers".format(name=name, seeders=se, leechers=le,
@@ -141,13 +144,13 @@ class MoviesDownloader(BaseDownloader):
         print "Done downloading the link"
         return torrent.name
 
-    def download_torrent(self, series, season_number, episode_number, download_directory):
+    def download_torrent(self, series, season_number, episode_number, download_directory, best_resolution):
         episode = self.get_episode_name(series, season_number, episode_number)
         series, episode_details = self.extract_details_from_episode_name(episode)
         self.set_crawling_attributes()
         soup = self.get_pirate_bay_soup(episode)
         if soup:
-            status, magnet_link = self.extract_magnet_link_from_soup(soup, episode)
+            status, magnet_link = self.extract_magnet_link_from_soup(soup, episode, best_resolution)
             if magnet_link:
                 download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
                 if download_name:
@@ -302,7 +305,7 @@ def create_directory(directory):
 
 
 def run(series, season_number, episode_number, download_directory, lang, full_season=False,
-        should_use_subscenter=False, subtitles_only=False, **kwargs):
+        should_use_subscenter=False, subtitles_only=False, best_resolution=False, **kwargs):
     season_number = str(season_number).zfill(2)
     episode_number = episode_number if isinstance(episode_number, int) \
         else int(episode_number) if episode_number.isdigit() else 0
@@ -332,7 +335,8 @@ def run(series, season_number, episode_number, download_directory, lang, full_se
                 episodes_directories.append(episode_download_directory)
             if not subtitles_only:
                 status, download_version = movies_downloader.download_torrent(series, season_number, episode_number,
-                                                                              episode_download_directory)
+                                                                              episode_download_directory,
+                                                                              best_resolution)
             else:
                 status = Status.success
             if download_version is not None:
