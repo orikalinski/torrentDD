@@ -130,6 +130,7 @@ class MoviesDownloader(BaseDownloader):
             time.sleep(1)
             torrent.update()
             bar.update(torrent.progress)
+        bar.finish()
         print "Done downloading the link"
         return torrent.name
 
