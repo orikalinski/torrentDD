@@ -18,7 +18,6 @@ from bs4 import BeautifulSoup
 from enum import Enum
 from fake_useragent import UserAgent
 
-SIMILARITY_THRESHOLD = 0.75
 SEEKER_THRESHOLD = 50
 LEECHES_THRESHOLD = 5
 MAX_NUMBER_OF_EPISODE_PER_SEASON = 20
@@ -233,14 +232,16 @@ class OpenSubtitleDownloader(SubtitlesDownloader):
         referrer_link = None
         final_download_version = None
         series, episode_details = self.extract_details_from_episode_name(episode)
+        highest_similarity = -1
         for subtitle in subtitles:
             subtitles_text = subtitle.text.lower()
             if '"{series}"'.format(series=series) in subtitles_text and episode_details in subtitles_text:
                 result = re.search(VERSION_REGEX_PATTERN.format(series=series.replace(' ', '.'),
                                                                 episode_details=episode_details), subtitles_text)
                 version = result.group(1) if result else u""
-                if not download_id \
-                        or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
+                similarity = Levenshtein.ratio(version.lower(), download_version.lower())
+                if similarity > highest_similarity:
+                    highest_similarity = similarity
                     final_download_version = version
                     download_id = OPENSUBTITLES_DOWNLOAD_REGEX.search(subtitle.find("a").get("onclick")).group(1)
                     referrer_link = "%s%s" % (OPENSUBTITLES_BASE_URL,
@@ -280,13 +281,15 @@ class SubscenterDownloader(SubtitlesDownloader):
         versions = soup.find_all("div", {"class": "subsDownloadVersion"})
         download_id = None
         final_download_version = None
+        highest_similarity = -1
         for button_text, version in zip(buttons_text, versions):
             result = re.search(VERSION_REGEX_PATTERN.format(series=series.replace(' ', '.'),
                                                             episode_details=episode_details), version.text, re.I)
             if result:
                 version = result.group(1)
-                if not download_id \
-                        or Levenshtein.ratio(version.lower(), download_version.lower()) > SIMILARITY_THRESHOLD:
+                similarity = Levenshtein.ratio(version.lower(), download_version.lower())
+                if similarity > highest_similarity:
+                    highest_similarity = similarity
                     final_download_version = version
                     download_id = SUBSCENTER_DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
