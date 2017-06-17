@@ -25,6 +25,7 @@ MAX_NUMBER_OF_EPISODE_PER_SEASON = 20
 MAGNET_REGEX = re.compile("^magnet")
 SERIES_SIZE_REGEX = re.compile("size (\d+).*mib")
 SUBSCENTER_DOWNLOAD_REGEX = re.compile("\?(.*?)'")
+SUBSCENTER_SEARCH_SERIES_PATTERN = ".*/series/{series}(?:-\d+)?/"
 OPENSUBTITLES_DOWNLOAD_REGEX = re.compile("subtitles/(\d+)/")
 OPENSUBTITLES_REFERRER_REGEX = re.compile("\'(.+)\'")
 AUTHORITY_REGEX = re.compile("https://(.+?)/")
@@ -270,9 +271,27 @@ class SubscenterDownloader(SubtitlesDownloader):
         password.set("moshemoshe")
         name.form().submit()
 
+    def find_the_url_of_the_series(self, series):
+        search_query = "http://www.subscenter.info/he/subtitle/search/?q={series}".format(series=series)
+        self.session.visit(search_query)
+        response = self.session.body()
+        soup = BeautifulSoup(response, "lxml")
+        movies = soup.find_all("div", {"class": "generalWindow process movieProcess"})
+        for movie in movies:
+            result = movie.find('a', href=re.compile(SUBSCENTER_SEARCH_SERIES_PATTERN
+                                                     .format(series=series.replace(' ', '-'))))
+            if result:
+                return result.get("href")
+
     def get_soup(self, series, season_number, episode_number, **kwargs):
-        subscenter_url = "http://www.subscenter.info/he/subtitle/series/{series}/{season_number}/{episode_number}/" \
-            .format(series=series.replace(' ', '-'), season_number=season_number, episode_number=episode_number)
+        url_prefix = self.find_the_url_of_the_series(series)
+        if url_prefix:
+            subscenter_url = "{url_prefix}{season_number}/{episode_number}".format(url_prefix=url_prefix,
+                                                                                   season_number=season_number,
+                                                                                   episode_number=episode_number)
+        else:
+            subscenter_url = "http://www.subscenter.info/he/subtitle/series/{series}/{season_number}/{episode_number}/" \
+                .format(series=series.replace(' ', '-'), season_number=season_number, episode_number=episode_number)
         print "Trying to reach: %s" % subscenter_url
         self.session.visit(subscenter_url)
         try:
