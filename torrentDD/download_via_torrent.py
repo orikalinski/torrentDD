@@ -260,9 +260,18 @@ class OpenSubtitleDownloader(SubtitlesDownloader):
 class SubscenterDownloader(SubtitlesDownloader):
     def __init__(self):
         super(SubscenterDownloader, self).__init__()
+        self.login()
+
+    def login(self):
+        self.session.visit("http://www.subscenter.info/he/subscenter/accounts/login/")
+        name = self.session.at_xpath('//*[@name="username"]')
+        name.set("moshemanhem@gmail.com")
+        password = self.session.at_xpath('//*[@name="password"]')
+        password.set("moshemoshe")
+        name.form().submit()
 
     def get_soup(self, series, season_number, episode_number, **kwargs):
-        subscenter_url = "http://www.subscenter.org/he/subtitle/series/{series}/{season_number}/{episode_number}/" \
+        subscenter_url = "http://www.subscenter.info/he/subtitle/series/{series}/{season_number}/{episode_number}/" \
             .format(series=series.replace(' ', '-'), season_number=season_number, episode_number=episode_number)
         print "Trying to reach: %s" % subscenter_url
         self.session.visit(subscenter_url)
@@ -294,7 +303,7 @@ class SubscenterDownloader(SubtitlesDownloader):
                     final_download_version = version
                     download_id = SUBSCENTER_DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
-            download_link = "http://www.subscenter.org/he/get/download/he/?{download_id}"\
+            download_link = "http://www.subscenter.info/he/get/download/he/?{download_id}"\
                 .format(download_id=download_id)
             print "Found subtitles of version: %s" % final_download_version
             return download_link, None
@@ -309,7 +318,7 @@ def create_directory(directory):
 
 
 def run(series, season_number, episode_number, download_directory, lang, full_season=False,
-        should_use_subscenter=False, subtitles_only=False, best_resolution=False, **kwargs):
+        should_use_subscenter=True, subtitles_only=False, best_resolution=False, **kwargs):
     season_number = str(season_number).zfill(2)
     episode_number = episode_number if isinstance(episode_number, int) \
         else int(episode_number) if episode_number.isdigit() else 0
