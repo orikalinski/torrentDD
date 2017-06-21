@@ -21,9 +21,11 @@ from fake_useragent import UserAgent
 SEEKER_THRESHOLD = 50
 LEECHES_THRESHOLD = 5
 MAX_NUMBER_OF_EPISODE_PER_SEASON = 20
+KILOBYTE = 1024
 
 MAGNET_REGEX = re.compile("^magnet")
-SERIES_SIZE_REGEX = re.compile("size (\d+).*mib")
+MB_SERIES_SIZE_REGEX = re.compile("size (\d+).*mib")
+GB_SERIES_SIZE_REGEX = re.compile("size (\d+).*gib")
 SUBSCENTER_DOWNLOAD_REGEX = re.compile("\?(.*?)'")
 SUBSCENTER_SEARCH_SERIES_PATTERN = ".*/series/{series}(?:-\d+)?/"
 OPENSUBTITLES_DOWNLOAD_REGEX = re.compile("subtitles/(\d+)/")
@@ -119,7 +121,12 @@ class MoviesDownloader(BaseDownloader):
                 status = Status.no_good_results
                 if (int(se) > SEEKER_THRESHOLD and int(le) > LEECHES_THRESHOLD) \
                         or (is_valid and int(se) > SEEKER_THRESHOLD // 5):
-                    size = int(SERIES_SIZE_REGEX.search(name.lower()).group(1))
+                    size_search = MB_SERIES_SIZE_REGEX.search(name.lower())
+                    if size_search:
+                        size = int(size_search.group(1))
+                    else:
+                        size_search = GB_SERIES_SIZE_REGEX.search(name.lower())
+                        size = int(size_search.group(1)) * KILOBYTE
                     proper_results.append((magnet_link, size, row))
         if proper_results:
             if best_resolution:
