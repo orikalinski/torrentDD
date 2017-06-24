@@ -33,7 +33,7 @@ SUBSCENTER_SEARCH_SERIES_PATTERN = ".*/series/{series}(?:-\d+)?/"
 OPENSUBTITLES_DOWNLOAD_REGEX = re.compile("subtitles/(\d+)/")
 OPENSUBTITLES_REFERRER_REGEX = re.compile("\'(.+)\'")
 AUTHORITY_REGEX = re.compile("https://(.+?)/")
-VERSION_REGEX_PATTERN = "{series}.*{episode_details}\.(.+?)(?:\.mkv)?(?:download at|$)"
+VERSION_REGEX_PATTERN = "{episode_details}\.(.+?)(?:\.mkv)?(?:download at|$)"
 
 CANONIZE_LANG = {"en": "eng", "he": "heb"}
 HEBREW = "he"
@@ -174,8 +174,7 @@ class MoviesDownloader(BaseDownloader):
             if magnet_link:
                 download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
                 if download_name:
-                    download_version = re.search(VERSION_REGEX_PATTERN.format(series=series.replace(' ', '.'),
-                                                                              episode_details=episode_details),
+                    download_version = re.search(VERSION_REGEX_PATTERN.format(episode_details=episode_details),
                                                  download_name, re.I).group(1)
                     return Status.success, download_version
             else:
@@ -257,8 +256,7 @@ class OpenSubtitleDownloader(SubtitlesDownloader):
         for subtitle in subtitles:
             subtitles_text = subtitle.text.lower()
             if '"{series}"'.format(series=series) in subtitles_text and episode_details in subtitles_text:
-                result = re.search(VERSION_REGEX_PATTERN.format(series=series.replace(' ', '.'),
-                                                                episode_details=episode_details), subtitles_text)
+                result = re.search(VERSION_REGEX_PATTERN.format(episode_details=episode_details), subtitles_text)
                 version = result.group(1) if result else u""
                 similarity = Levenshtein.ratio(version.lower(), download_version.lower())
                 if similarity > highest_similarity:
@@ -331,8 +329,7 @@ class SubscenterDownloader(SubtitlesDownloader):
         final_download_version = None
         highest_similarity = -1
         for button_text, version in zip(buttons_text, versions):
-            result = re.search(VERSION_REGEX_PATTERN.format(series=series.replace(' ', '.'),
-                                                            episode_details=episode_details), version.text, re.I)
+            result = re.search(VERSION_REGEX_PATTERN.format(episode_details=episode_details), version.text, re.I)
             if result:
                 version = result.group(1)
                 similarity = Levenshtein.ratio(version.lower(), download_version.lower())
