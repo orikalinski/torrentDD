@@ -55,13 +55,13 @@ class BaseDownloader(object):
 
     @staticmethod
     def get_episode_name(series, season_number, episode_number):
-        return "{series}.s{season}e{episode}".format(series=series.replace(' ', '.'), season=season_number,
+        return u"{series}.s{season}e{episode}".format(series=series.replace(' ', '.'), season=season_number,
                                                      episode=episode_number)
 
     @staticmethod
     def extract_details_from_episode_name(episode):
         splitted_episode = episode.split('.')
-        return " ".join(splitted_episode[:-1]), splitted_episode[-1]
+        return u" ".join(splitted_episode[:-1]), splitted_episode[-1]
 
     def get_headers_with_user_agent(self):
         headers = requests.utils.default_headers()
@@ -120,7 +120,7 @@ class MoviesDownloader(BaseDownloader):
         series, episode_details = self.extract_details_from_episode_name(episode)
         pirate_episode_name = re.search(SERIES_NAME_PATTERN.format(episode_details=episode_details),
                                         lower_name, re.I).group(1)
-        if Levenshtein.ratio(series, pirate_episode_name) > SIMILARITY_THRESHOLD:
+        if Levenshtein.ratio(series, pirate_episode_name.replace('.', ' ')) > SIMILARITY_THRESHOLD:
             return True
         return False
 
@@ -357,7 +357,6 @@ def create_directory(directory):
 
 def run(series, season_number, episode_number, download_directory, lang, full_season=False,
         should_use_subscenter=True, subtitles_only=False, best_resolution=False, **kwargs):
-    series = unicode(series)
     season_number = str(season_number).zfill(2)
     episode_number = episode_number if isinstance(episode_number, int) \
         else int(episode_number) if episode_number.isdigit() else 0
