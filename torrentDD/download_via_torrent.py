@@ -114,11 +114,12 @@ class MoviesDownloader(BaseDownloader):
         return data
 
     def is_episode_name_fit(self, name, episode):
-        if name.lower().startswith(episode) or name.lower().startswith(episode.replace('.', ' ')):
+        lower_name = name.lower()
+        if lower_name.startswith(episode) or lower_name.startswith(episode.replace('.', ' ')):
             return True
         series, episode_details = self.extract_details_from_episode_name(episode)
         pirate_episode_name = re.search(SERIES_NAME_PATTERN.format(episode_details=episode_details),
-                                        name, re.I).group(1)
+                                        lower_name, re.I).group(1)
         if Levenshtein.ratio(series, pirate_episode_name) > SIMILARITY_THRESHOLD:
             return True
         return False
@@ -356,6 +357,7 @@ def create_directory(directory):
 
 def run(series, season_number, episode_number, download_directory, lang, full_season=False,
         should_use_subscenter=True, subtitles_only=False, best_resolution=False, **kwargs):
+    series = unicode(series)
     season_number = str(season_number).zfill(2)
     episode_number = episode_number if isinstance(episode_number, int) \
         else int(episode_number) if episode_number.isdigit() else 0
