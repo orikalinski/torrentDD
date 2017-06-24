@@ -20,10 +20,12 @@ from fake_useragent import UserAgent
 
 SEEKER_THRESHOLD = 50
 LEECHES_THRESHOLD = 5
+SIMILARITY_THRESHOLD = 90
 MAX_NUMBER_OF_EPISODE_PER_SEASON = 20
 KILOBYTE = 1024
 
 MAGNET_REGEX = re.compile("^magnet")
+SERIES_NAME_PATTERN = "(.*)\.{episode_details}"
 MB_SERIES_SIZE_REGEX = re.compile("size (\d+).*mib")
 GB_SERIES_SIZE_REGEX = re.compile("size (\d+).*gib")
 SUBSCENTER_DOWNLOAD_REGEX = re.compile("\?(.*?)'")
@@ -111,13 +113,22 @@ class MoviesDownloader(BaseDownloader):
                 data.append(cols_text)
         return data
 
-    @staticmethod
-    def find_best_result(data, episode, best_resolution):
+    def is_episode_name_fit(self, name, episode):
+        if name.lower().startswith(episode) or name.lower().startswith(episode.replace('.', ' ')):
+            return True
+        series, episode_details = self.extract_details_from_episode_name(episode)
+        pirate_episode_name = re.search(SERIES_NAME_PATTERN.format(episode_details=episode_details),
+                                        name, re.I).group(1)
+        if Levenshtein.ratio(series, pirate_episode_name) > SIMILARITY_THRESHOLD:
+            return True
+        return False
+
+    def find_best_result(self, data, episode, best_resolution):
         status = Status.no_results
         proper_results = list()
         for row in data:
             _, name, se, le, magnet_link, is_valid = row
-            if magnet_link and (name.lower().startswith(episode) or name.lower().startswith(episode.replace('.', ' '))):
+            if magnet_link and self.is_episode_name_fit(name, episode):
                 status = Status.no_good_results
                 if (int(se) > SEEKER_THRESHOLD and int(le) > LEECHES_THRESHOLD) \
                         or (is_valid and int(se) > SEEKER_THRESHOLD // 5):
