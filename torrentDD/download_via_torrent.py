@@ -75,7 +75,7 @@ class MoviesDownloader(BaseDownloader):
         self.tc = transmissionrpc.Client(user="transmission", password="transmission")
 
     def get_pirate_bay_soup(self, episode):
-        pirate_url = "https://thepiratebay.org/search/{episode}/0/99/0".format(episode=episode)
+        pirate_url = "https://thepiratebay.org/search/{episode}/0/99/0".format(episode=episode.replace("'s", ""))
         print "Trying to reach: %s" % pirate_url
         self.session.visit(pirate_url)
         try:
