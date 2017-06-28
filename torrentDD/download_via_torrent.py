@@ -25,7 +25,7 @@ MAX_NUMBER_OF_EPISODE_PER_SEASON = 20
 KILOBYTE = 1024
 
 MAGNET_REGEX = re.compile("^magnet")
-SERIES_NAME_PATTERN = "(.*)\.{episode_details}"
+SERIES_NAME_PATTERN = "(.*?)(?:\.)?{episode_details}"
 MB_SERIES_SIZE_REGEX = re.compile("size (\d+).*mib")
 GB_SERIES_SIZE_REGEX = re.compile("size (\d+).*gib")
 SUBSCENTER_DOWNLOAD_REGEX = re.compile("\?(.*?)'")
