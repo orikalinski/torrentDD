@@ -115,9 +115,9 @@ class MoviesDownloader(BaseDownloader):
 
     def is_episode_name_fit(self, name, episode):
         lower_name = name.lower()
-        if lower_name.startswith(episode) or lower_name.startswith(episode.replace('.', ' ')):
-            return True
         series, episode_details = self.extract_details_from_episode_name(episode)
+        if lower_name.replace('.', ' ').startswith(series) and episode_details in lower_name:
+            return True
         pirate_episode_name = re.search(SERIES_NAME_PATTERN.format(episode_details=episode_details),
                                         lower_name, re.I).group(1)
         if Levenshtein.ratio(series, pirate_episode_name.replace('.', ' ')) > SIMILARITY_THRESHOLD:
