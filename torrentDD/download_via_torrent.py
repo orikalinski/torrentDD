@@ -237,7 +237,7 @@ class OpenSubtitleDownloader(SubtitlesDownloader):
         print "Trying to reach: %s" % opensubtitles_url
         self.session.visit(opensubtitles_url)
         try:
-            self.session.wait_for(lambda: self.session.at_css("div.msg"))
+            self.session.wait_for(lambda: self.session.at_css("td.sb_star_even"))
         except Exception, e:
             print "Failed while trying to download the subtitles: %s" % e
             return None
