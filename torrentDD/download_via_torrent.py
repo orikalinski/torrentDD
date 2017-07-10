@@ -26,8 +26,8 @@ KILOBYTE = 1024
 
 MAGNET_REGEX = re.compile("^magnet")
 SERIES_NAME_PATTERN = "(.*?)(?:\.)?{episode_details}"
-MB_SERIES_SIZE_REGEX = re.compile("size (\d+).*mib")
-GB_SERIES_SIZE_REGEX = re.compile("size (\d+).*gib")
+MB_SERIES_SIZE_REGEX = re.compile("size (\d+).*mib", re.DOTALL)
+GB_SERIES_SIZE_REGEX = re.compile("size (\d+).*gib", re.DOTALL)
 SUBSCENTER_DOWNLOAD_REGEX = re.compile("\?(.*?)'")
 SUBSCENTER_SEARCH_SERIES_PATTERN = ".*/series/{series}(?:-\d+)?/"
 OPENSUBTITLES_DOWNLOAD_REGEX = re.compile("subtitles/(\d+)/")
@@ -135,10 +135,10 @@ class MoviesDownloader(BaseDownloader):
                         or (is_valid and int(se) > SEEKER_THRESHOLD // 5):
                     size_search = MB_SERIES_SIZE_REGEX.search(name.lower())
                     if size_search:
-                        size = int(size_search.group(1))
+                        size = float(size_search.group(1))
                     else:
                         size_search = GB_SERIES_SIZE_REGEX.search(name.lower())
-                        size = int(size_search.group(1)) * KILOBYTE
+                        size = float(size_search.group(1)) * KILOBYTE
                     proper_results.append((magnet_link, size, row))
         if proper_results:
             if best_resolution:
@@ -338,7 +338,7 @@ class SubscenterDownloader(SubtitlesDownloader):
                     final_download_version = version
                     download_id = SUBSCENTER_DOWNLOAD_REGEX.search(button_text.find("a").get("onclick")).group(1)
         if download_id:
-            download_link = "http://www.subscenter.info/he/get/download/he/?{download_id}"\
+            download_link = "http://www.subscenter.info/he/show/download/he/?{download_id}"\
                 .format(download_id=download_id)
             print "Found subtitles of version: %s" % final_download_version
             return download_link, None
@@ -367,7 +367,8 @@ def run(series, season_number, episode_number, download_directory, lang, full_se
         create_directory(download_directory)
     series = series.lower()
     movies_downloader = MoviesDownloader()
-    subscenter_downloader = SubscenterDownloader()
+    if should_use_subscenter:
+        subscenter_downloader = SubscenterDownloader()
     opensubtitles_downloader = OpenSubtitleDownloader()
 
     episodes_directories = list()
