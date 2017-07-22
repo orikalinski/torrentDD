@@ -17,6 +17,7 @@ import transmissionrpc
 from bs4 import BeautifulSoup
 from enum import Enum
 from fake_useragent import UserAgent
+from webkit_server import InvalidResponseError
 
 SEEKER_THRESHOLD = 50
 LEECHES_THRESHOLD = 5
@@ -77,12 +78,16 @@ class MoviesDownloader(BaseDownloader):
     def get_pirate_bay_soup(self, episode):
         pirate_url = "https://thepiratebay.org/search/{episode}/0/99/0".format(episode=episode.replace("'s", ""))
         print "Trying to reach: %s" % pirate_url
-        self.session.visit(pirate_url)
+        try:
+            self.session.visit(pirate_url)
+        except InvalidResponseError, e:
+            print "Couldn't reach piratebay.org: %s" % e
+            return Status.no_connection
         try:
             self.session.wait_for(lambda: self.session.at_css("td.vertTh"))
         except Exception, e:
-            print "Failed while trying to reach piratebay.org: %s" % e
-            return None
+            print "No results were found: %s" % e
+            return Status.no_results
         response = self.session.body()
         soup = BeautifulSoup(response, "lxml")
         return soup
@@ -169,7 +174,7 @@ class MoviesDownloader(BaseDownloader):
         series, episode_details = self.extract_details_from_episode_name(episode)
         self.set_crawling_attributes()
         soup = self.get_pirate_bay_soup(episode)
-        if soup:
+        if type(soup) == BeautifulSoup:
             status, magnet_link = self.extract_magnet_link_from_soup(soup, episode, best_resolution)
             if magnet_link:
                 download_name = self.download_torrent_from_magnet_link(magnet_link, download_directory)
@@ -184,7 +189,7 @@ class MoviesDownloader(BaseDownloader):
                     print "Couldn't find any trusty episode to: %s" % episode
                 return status, None
         else:
-            return Status.no_connection, None
+            return soup, None
         return Status.generic_erorr, None
 
 
@@ -354,6 +359,7 @@ def create_directory(directory):
 
 def run(series, season_number, episode_number, download_directory, lang, full_season=False,
         should_use_subscenter=True, subtitles_only=False, best_resolution=False, **kwargs):
+    should_use_subscenter = True if str(should_use_subscenter).lower() == "true" else False
     season_number = str(season_number).zfill(2)
     episode_number = episode_number if isinstance(episode_number, int) \
         else int(episode_number) if episode_number.isdigit() else 0
@@ -419,6 +425,7 @@ def run(series, season_number, episode_number, download_directory, lang, full_se
                 os.remove(file_path)
     print "The following episodes: %s were downloaded successfully" % downloaded_episodes
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-sea', '--season_number')
@@ -427,5 +434,6 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--download_directory')
     parser.add_argument('-l', '--lang')
     parser.add_argument('-f', '--full_season')
+    parser.add_argument('-s', '--should_use_subscenter')
     args = parser.parse_args()
     run(**args.__dict__)
