@@ -34,7 +34,7 @@ SUBSCENTER_SEARCH_SERIES_PATTERN = ".*/series/{series}(?:-\d+)?/"
 OPENSUBTITLES_DOWNLOAD_REGEX = re.compile("subtitles/(\d+)/")
 OPENSUBTITLES_REFERRER_REGEX = re.compile("\'(.+)\'")
 AUTHORITY_REGEX = re.compile("https://(.+?)/")
-VERSION_REGEX_PATTERN = "{episode_details}\.(.+?)(?:\.mkv)?(?:download at|$)"
+VERSION_REGEX_PATTERN = "{episode_details}\.?(.+?)(?:\.mkv)?(?:download at|$)"
 
 CANONIZE_LANG = {"en": "eng", "he": "heb"}
 HEBREW = "he"
@@ -76,7 +76,7 @@ class MoviesDownloader(BaseDownloader):
         self.tc = transmissionrpc.Client(user="transmission", password="transmission")
 
     def get_pirate_bay_soup(self, episode):
-        pirate_url = "https://thepiratebay.org/search/{episode}/0/99/0".format(episode=episode.replace("'s", ""))
+        pirate_url = "https://thepiratebay.org/search/{episode}/0/99/0".format(episode=episode.replace("'s", "s"))
         print "Trying to reach: %s" % pirate_url
         try:
             self.session.visit(pirate_url)
